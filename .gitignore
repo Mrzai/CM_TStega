@@ -1,0 +1,50 @@
+# Byte-compiled Python files
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+
+# Log files and TensorBoard logs
+*.log
+*.out
+log/
+log_*/
+flickr8_log/
+flickr8_log/log_*/
+
+# Model checkpoints and large binary files
+*.pth
+*.pkl
+*.npy
+*.txt
+*.json
+log/cap_model*.pth
+log/optimizer*.pth
+log/sec_*.pth
+Vectors/counter-fitted-vectors.txt
+Vectors/glove.840B.300d.txt
+
+# Evaluation results
+eval_results/
+Stega_attack/eval_results/
+
+# Miscellaneous auxiliary files
+# Vectors/aux_files/
+# misc/
+# Stega_attack/Vectors/aux_files/
+
+# Temporary or backup files
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# Scripts and generated datasets
+# scripts/
+# Stega_attack/data_pre.py
+# Stega_attack/feat_pre.py
+
+# PDFs and other documents
+*.pdf
+
+# Anything else you don't want to track
