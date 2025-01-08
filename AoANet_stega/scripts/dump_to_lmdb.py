@@ -51,7 +51,7 @@ class FolderLMDB(data.Dataset):
             else:
                 feat = np.load(buf)
         except Exception as e:
-            print self.keys[index], e
+            print(self.keys[index], e)
             return None
 
         return feat
@@ -87,9 +87,9 @@ def raw_npz_reader(path):
     try:
         npz_data = np.load(six.BytesIO(bin_data))['feat']
     except Exception as e:
-        print path
+        print(path)
         npz_data = None
-        print e
+        print(e)
     return bin_data, npz_data
 
 
@@ -99,9 +99,9 @@ def raw_npy_reader(path):
     try:
         npy_data = np.load(six.BytesIO(bin_data))
     except Exception as e:
-        print path
+        print(path)
         npy_data = None
-        print e
+        print(e)
     return bin_data, npy_data
 
 
@@ -137,7 +137,7 @@ class Folder(data.Dataset):
 
 def folder2lmdb(dpath, fn_list, write_frequency=5000):
     directory = osp.expanduser(osp.join(dpath))
-    print("Loading dataset from %s" % directory)
+    print(("Loading dataset from %s" % directory))
     if args.extension == '.npz':
         dataset = Folder(directory, loader=raw_npz_reader, extension='.npz',
                          fn_list=fn_list)
@@ -150,7 +150,7 @@ def folder2lmdb(dpath, fn_list, write_frequency=5000):
     lmdb_path = osp.join("%s.lmdb" % (directory))
     isdir = os.path.isdir(lmdb_path)
 
-    print("Generate LMDB to %s" % lmdb_path)
+    print(("Generate LMDB to %s" % lmdb_path))
     db = lmdb.open(lmdb_path, subdir=isdir,
                    map_size=1099511627776 * 2, readonly=False, 
                    meminit=False, map_async=True)
@@ -167,7 +167,7 @@ def folder2lmdb(dpath, fn_list, write_frequency=5000):
             txn.put(name, byte)
         names.append({'image_id': name, 'status': str(npz is not None)})
         if idx % write_frequency == 0:
-            print("[%d/%d]" % (idx, len(data_loader)))
+            print(("[%d/%d]" % (idx, len(data_loader))))
             print('writing')
             txn.commit()
             txn = db.begin(write=True)
@@ -210,7 +210,7 @@ if __name__ == "__main__":
     args.output_file += args.folder.split('/')[-1]
     if args.folder.find('/') > 0:
         args.output_file = args.folder[:args.folder.rfind('/')+1]+args.output_file
-    print(args.output_file)
+    print((args.output_file))
 
     img_list = json.load(open(args.input_json, 'r'))['images']
     fn_list = [str(_['cocoid']) for _ in img_list]

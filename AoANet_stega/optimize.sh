@@ -1,0 +1,15 @@
+python optimize_model.py \     
+    --model_path log \
+    --infos_path log/infos_aoanet-best.pkl \
+    --input_json /data/I2T_data/MSCOCO/dataset_coco_fixed.json \
+    --input_fc_dir /data/I2T_data/MSCOCO/cocotalk_fc \
+    --input_att_dir /data/I2T_data/MSCOCO/cocotalk_att \
+    --input_box_dir data/cocotalk_box \
+    --input_label_h5 /data/I2T_data/MSCOCO/cocotalk_label.h5 \
+    --secret_size 10 \
+    --id aoanet \
+    --dump_images 0 \
+    --dump_json 1 \
+    --language_eval 1 \
+    --prune_amount 0.3 \
+    --distill_epochs 5

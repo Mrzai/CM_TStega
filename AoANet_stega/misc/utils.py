@@ -11,6 +11,9 @@ import os
 import sys
 import six
 import pickle
+import time
+import json
+import datetime
 
 bad_endings = ['with','in','on','of','a','at','to','for','an','this','his','her','that']
 bad_endings += ['the']
@@ -211,3 +214,98 @@ def get_secret_acc(secret_true, secret_pred):
     #str_acc = 1.0 - torch.sum((correct_pred - secret_pred.size()[1]) != 0).numpy() / correct_pred.size()[0]
     bit_acc = torch.sum(correct_pred).numpy() / secret_pred.numel()
     return bit_acc
+
+def get_model_size(model):
+    """计算模型大小（MB）"""
+    param_size = 0
+    for param in model.parameters():
+        param_size += param.nelement() * param.element_size()
+    buffer_size = 0
+    for buffer in model.buffers():
+        buffer_size += buffer.nelement() * buffer.element_size()
+    
+    size_all_mb = (param_size + buffer_size) / 1024**2
+    return round(size_all_mb, 2)
+
+def calculate_metrics(original_size, optimized_size, original_speed, optimized_speed):
+    """计算优化指标"""
+    return {
+        'size_reduction': (original_size - optimized_size) / original_size * 100,
+        'speed_improvement': (optimized_speed - original_speed) / original_speed * 100
+    }
+
+def benchmark_inference_speed(model, sample_input, num_iterations=100):
+    """测试推理速度"""
+    model.eval()
+    with torch.no_grad():
+        # 预热
+        for _ in range(10):
+            _ = model(*sample_input)
+        
+        # 计时
+        start_time = time.time()
+        for _ in range(num_iterations):
+            _ = model(*sample_input)
+        end_time = time.time()
+        
+    return (end_time - start_time) / num_iterations
+
+def compare_outputs(original_output, optimized_output, threshold=0.95):
+    """比较原始输出和优化后输出的相似度"""
+    if isinstance(original_output, torch.Tensor):
+        original_output = original_output.detach().cpu().numpy()
+    if isinstance(optimized_output, torch.Tensor):
+        optimized_output = optimized_output.detach().cpu().numpy()
+    
+    similarity = np.corrcoef(original_output.flatten(), optimized_output.flatten())[0,1]
+    return similarity > threshold
+
+class OptimizationLogger:
+    """优化过程日志记录"""
+    def __init__(self, log_dir):
+        self.log_dir = log_dir
+        os.makedirs(log_dir, exist_ok=True)
+        self.metrics = {
+            'original': {},
+            'quantized': {},
+            'pruned': {},
+            'distilled': {}
+        }
+    
+    def log_metrics(self, stage, metrics):
+        """记录各阶段的指标"""
+        self.metrics[stage].update(metrics)
+        
+    def save_report(self):
+        """保存优化报告"""
+        report_path = os.path.join(self.log_dir, 'optimization_report.json')
+        with open(report_path, 'w') as f:
+            json.dump(self.metrics, f, indent=2)
+            
+    def print_summary(self):
+        """打印优化总结"""
+        print("\nOptimization Summary:")
+        print("-" * 50)
+        for stage, metrics in self.metrics.items():
+            print(f"\n{stage.upper()} STAGE:")
+            for metric, value in metrics.items():
+                print(f"{metric}: {value}")
+        print("-" * 50)
+
+def save_optimized_model(model, save_path, include_metadata=True):
+    """保存优化后的模型"""
+    metadata = {
+        'model_size': get_model_size(model),
+        'optimization_info': {
+            'quantized': hasattr(model, 'qconfig'),
+            'pruned': hasattr(model, 'mask_dict'),
+            'timestamp': datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        }
+    }
+    
+    save_dict = {
+        'model_state_dict': model.state_dict(),
+        'metadata': metadata if include_metadata else None
+    }
+    
+    torch.save(save_dict, save_path) 

@@ -31,11 +31,20 @@ bad_endings = ['a','an','the','in','for','at','of','with','before','after','on',
 bad_endings += ['the']
 
 def sort_pack_padded_sequence(input, lengths):
+    """重写pack_padded_sequence函数，确保lengths在CPU上"""
     sorted_lengths, indices = torch.sort(lengths, descending=True)
-    tmp = pack_padded_sequence(input[indices], sorted_lengths, batch_first=True)
-    inv_ix = indices.clone()
-    inv_ix[indices] = torch.arange(0,len(indices)).type_as(inv_ix)
-    return tmp, inv_ix
+    
+    # 确保lengths在CPU上
+    if sorted_lengths.is_cuda:
+        sorted_lengths = sorted_lengths.cpu()
+        
+    # 重排输入
+    tmp = input.index_select(0, indices)
+    
+    # 使用CPU上的lengths进行打包
+    packed = pack_padded_sequence(tmp, sorted_lengths, batch_first=True)
+    
+    return packed, indices
 
 def pad_unsort_packed_sequence(input, inv_ix):
     tmp, _ = pad_packed_sequence(input, batch_first=True)
@@ -104,14 +113,26 @@ class AttModel(CaptionModel):
 
     def _prepare_feature(self, fc_feats, att_feats, att_masks):
         att_feats, att_masks = self.clip_att(att_feats, att_masks)
-
+        
+        # 确保lengths在CPU上计算
+        if att_masks is None:
+            att_masks = torch.ones(att_feats.shape[:2], dtype=torch.float, device='cpu')
+        
+        # 计算lengths并保持在CPU上
+        lengths = att_masks.sum(-1).long()
+        if lengths.is_cuda:
+            lengths = lengths.cpu()
+            
+        # 将att_masks移到正确的设备上
+        att_masks = att_masks.to(att_feats.device)
+        
         # embed fc and att feats
         fc_feats = self.fc_embed(fc_feats)
-        att_feats = pack_wrapper(self.att_embed, att_feats, att_masks)
-
-        # Project the attention feats first to reduce memory and computation comsumptions.
+        att_feats = pack_wrapper(self.att_embed, att_feats, lengths)
+        
+        # Project the attention feats first to reduce memory and computation
         p_att_feats = self.ctx2att(att_feats)
-
+        
         return fc_feats, att_feats, p_att_feats, att_masks
 
     def _forward(self, fc_feats, att_feats, seq, att_masks=None):
@@ -217,6 +238,37 @@ class AttModel(CaptionModel):
             #     break
         side_info = torch.stack(side_info, dim=1)
         return seq, side_info, seqLogprobs
+
+    def core(self, xt, fc_feats, att_feats, p_att_feats, state, att_masks=None):
+        """处理RNN和非RNN模型的核心逻辑"""
+        if hasattr(self, 'rnn'):
+            # 确保lengths在CPU上
+            if att_masks is not None:
+                lengths = att_masks.sum(-1).long()
+                if lengths.is_cuda:
+                    lengths = lengths.cpu()
+            else:
+                lengths = torch.LongTensor([att_feats.size(1)] * att_feats.size(0))
+                
+            packed_xt, indices = sort_pack_padded_sequence(xt, lengths)
+            output, state = self.rnn(packed_xt, state)
+            
+            return output, state
+        else:
+            # 非RNN模型的处理逻辑
+            # 检查是否是AoAModel
+            if hasattr(self, 'aoa_module'):
+                # AoAModel的处理逻辑
+                att = self.att(xt, fc_feats, att_feats, p_att_feats, att_masks)
+                output = self.ctx2att(att) if hasattr(self, 'ctx2att') else att
+            else:
+                # 默认处理
+                output = xt
+                
+            if hasattr(self, 'ctx2out'):
+                output = self.ctx2out(output)
+                
+            return output, state
 
 
 class Attention(nn.Module):
